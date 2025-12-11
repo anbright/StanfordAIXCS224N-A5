@@ -122,13 +122,13 @@ class CausalSelfAttention(nn.Module):
         if self.rope:
             assert (config.n_embd % config.n_head) % 2 == 0
 
-            ### TODO:
             # [part h] Precompute the cos and sin values for RoPE and
             # store them in rope_cache.
             # Hint: The maximum sequence length is given by config.block_size.
-            rope_cache = None
-            ### START CODE HERE
-            ### END CODE HERE
+
+            d_head = config.n_embd // config.n_head
+
+            rope_cache = precompute_rotary_emb(d_head, config.block_size)
 
             self.register_buffer("rope_cache", rope_cache)
 
@@ -154,11 +154,9 @@ class CausalSelfAttention(nn.Module):
         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         if self.rope:
-            pass
-            ### TODO:
             # [part h] Apply RoPE to the query and key.
-            ### START CODE HERE
-            ### END CODE HERE
+            q = apply_rotary_emb(q, self.rope_cache)
+            k = apply_rotary_emb(k, self.rope_cache)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
