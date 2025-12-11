@@ -35,11 +35,24 @@ def precompute_rotary_emb(dim, max_positions):
     the embedding.
     """
 
-    rope_cache = None
 
-    ### TODO:
-    ### [part h]
-    ### START CODE HERE
+    # Generate a list of the indices t from 0 to dim//2
+    t = torch.arange(0, max_positions, dtype=torch.float32).unsqueeze(1)
+
+
+    # Calculate theta based on
+    # theta_i = 1/10000^(2(i-1)/dim) for i in [1, dim/2]
+    # Given our i is 0 indexed => 2*i
+    i = torch.arange(0, dim // 2, dtype=torch.float32)
+    theta_i = 1.0 / (10000 ** (2 * i / dim))
+
+    # Calculates the angles
+    angles = t * theta_i.unsqueeze(0)
+    cos = torch.cos(angles)
+    sin = torch.sin(angles)
+
+    rope_cache = torch.stack((cos, sin), dim=-1)
+
     ### END CODE HERE
     return rope_cache
 
@@ -57,11 +70,37 @@ def apply_rotary_emb(x, rope_cache):
     # from the length of the precomputed values. In this case, you should use
     # truncate the precomputed values to match the length of the sequence.
 
-    rotated_x = None
-    ### TODO:
-    ### [part h]
-    ### START CODE HERE
-    ### END CODE HERE
+    # From the below forward code, the dimensions are:
+    # (B, nh, Tk, hs)
+    B, n_head, T, d_head = x.shape
+
+    # ROPE is [cos tθ1 + i sin tθ1]              [x(1)t + ix(2)]
+    #         [cos tθ2 + i sin tθ2] \elementmult [x(3)t + ix(4)]
+
+    # Get the first T positions from the cache
+    rope = rope_cache[:T]                      # (T, d_head/2, 2)
+
+    # Creates the matrix [cos tθ1 + i sin tθ1]
+    # torch.view_as_complex expects the first dimension to be real
+    # and the last dim to be imaginary
+    rope_complex = torch.view_as_complex(rope)      # (T, d_head/2)
+    # Creates the proper dimensions
+    rope_complex = rope_complex.unsqueeze(0).unsqueeze(0)
+
+
+    # Generate the second matrix [x(1)t + ix(2)]
+    x_pair = x.view(B, n_head, T, d_head // 2, 2)   # real/imag pairs
+    x_complex = torch.view_as_complex(x_pair)       # (B, n_head, T, d_head/2)
+
+    # Perform the elementwise multiplication which rotates the matrix
+    x_rot_complex = x_complex * rope_complex        # elementwise complex mul
+
+    # Convert back to real numbers
+    x_rot_pair = torch.view_as_real(x_rot_complex)  # (B, n_head, T, d_head/2, 2)
+
+    # Reshape back to original dimensions
+    rotated_x = x_rot_pair.view(B, n_head, T, d_head)
+
     return rotated_x
 
 class CausalSelfAttention(nn.Module):

@@ -12,12 +12,10 @@ def initialize_vanilla_model(mconf):
     return attention_model
 
 def initialize_rope_model(mconf):
-    attention_model = None
-    ### TODO
-    ### [part h]: Make some other model here
+    ### [part h]: Make some other model here that uses RoPE
+    mconf.rope = True
+    attention_model = GPT(mconf)
 
-    ### START CODE HERE
-    ### END CODE HERE
     return attention_model
 
 def finetune(reading_params_path, finetune_corpus_path, pretrain_dataset, block_size, model, finetune_lr=6e-4, writer=None):
