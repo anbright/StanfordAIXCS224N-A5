@@ -172,13 +172,79 @@ class CharCorruptionDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        ### TODO:
-        ### [part e]: see spec above
+        # Checks if the index is out of bounds
+        if idx >= len(self.data):
+            raise IndexError
+        
+        # 0. Use the idx argument of __getitem__ to retrieve the element of self.data
+        # at the given index. We'll call the resulting data entry a document.
 
-        ### START CODE HERE
-        ### END CODE HERE
+        document = self.data[idx]
 
-        raise NotImplementedError
+        # 1. Randomly truncate the document to a length no less than 4 characters,
+        # and no more than int(self.block_size*3/4) characters.
+
+        ## Gets random index to truncate between 4 and block_size * 3/4 with
+        ## a uniform chance of being picked
+        random_trunc_idx = random.randint(4, int(self.block_size * 3/4))
+        truncated_document = document[0:random_trunc_idx]
+
+        # 2. Now, break the (truncated) document into three substrings:
+        # [prefix] [masked_content] [suffix]
+
+        #   In other words, choose three strings prefix, masked_content and suffix
+        #     such that prefix + masked_content + suffix = [the truncated document].
+        #   The length of [masked_content] should be random, and 1/4 the length of the
+        #     truncated document on average.
+
+        # - IMPORTANT: You are free to decide how to perform this operation, but
+        # make sure that the length is picked _randomly_ (has a chance of being more or
+        # less than 1/4 the length of the truncated document) for full credit.
+
+        # Random length of masked content centered around a mean of 0.25
+        random_masked_content_len = max(1, int(len(truncated_document) * random.uniform(0.1, 0.4)))
+
+        # Calculates random start index for masked content 
+        random_masked_content_start = random.randint(0, len(truncated_document) - random_masked_content_len)
+        prefix = truncated_document[0:random_masked_content_start]
+        masked_content = truncated_document[random_masked_content_start:random_masked_content_start + random_masked_content_len]
+        suffix = truncated_document[random_masked_content_start + random_masked_content_len:] 
+
+        # 3. Rearrange these substrings into the following form:
+
+        #     [prefix] MASK_CHAR [suffix] MASK_CHAR [masked_content] MASK_CHAR [pads]
+        
+        #   This resulting string, denoted masked_string, serves as the output example.
+        #   Here MASK_CHAR is the masking character defined in Vocabulary Specification,
+        #     and [pads] is a string of repeated PAD_CHAR characters chosen so that the
+        #     entire string is of length self.block_size.
+        #   Intuitively, the [masked_content], a string, is removed from the document and
+        #     replaced with MASK_CHAR (the masking character defined in Vocabulary
+        #     Specification). After the suffix of the string, the MASK_CHAR is seen again,
+        #     followed by the content that was removed, and the padding characters.
+
+        masked_string = prefix + self.MASK_CHAR + suffix + self.MASK_CHAR + masked_content + self.MASK_CHAR
+        padded_masked_string = masked_string + self.PAD_CHAR * (self.block_size - len(masked_string))
+
+        # 4. We now use masked_string to construct the input and output example pair. To
+        # do so, simply take the input string to be masked_string[:-1], and the output
+        # string to be masked_string[1:]. In other words, for each character, the goal is
+        # to predict the next character in the masked string.
+
+        # Produces inputs and outputs which are the same length
+        input = padded_masked_string[:-1]
+        output = padded_masked_string[1:]
+
+        # 5. Making use of the vocabulary that you defined, encode the resulting input
+        # and output strings as Long tensors and return the resulting data point.
+
+        input_indices = [self.stoi[c] for c in input]
+        output_indices = [self.stoi[c] for c in output]
+
+        input_tensor = torch.LongTensor(input_indices)
+        output_tensor = torch.LongTensor(output_indices)
+
+        return (input_tensor, output_tensor)
 
 """
 Code under here is strictly for your debugging purposes; feel free to modify
