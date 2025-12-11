@@ -7,12 +7,8 @@ import random
 random.seed(0)
 
 def initialize_vanilla_model(mconf):
-    attention_model = None
-    ### TODO:
-    ### [part d]: Make some model here
+    attention_model = GPT(mconf)
 
-    ### START CODE HERE
-    ### END CODE HERE
     return attention_model
 
 def initialize_rope_model(mconf):
@@ -25,7 +21,6 @@ def initialize_rope_model(mconf):
     return attention_model
 
 def finetune(reading_params_path, finetune_corpus_path, pretrain_dataset, block_size, model, finetune_lr=6e-4, writer=None):
-    ### TODO:
     ### [part d] [part f]:
     ### - Given:
     ###     1. A finetuning corpus specified in finetune_corpus_path
@@ -57,10 +52,29 @@ def finetune(reading_params_path, finetune_corpus_path, pretrain_dataset, block_
     ###
     ### Note: Please use torch.load(reading_params_path, map_location=torch.device('cpu'), weights_only=True) to load pretrained model 
 
-    trainer_obj = None #Trainer object (see trainer.py for more details)
-    tconf = None #TrainerConfig object (see trainer.py for more details)
-    ### START CODE HERE
-    ### END CODE HERE
+    # Opens the finetuning corpus
+    finetune_text = open(finetune_corpus_path, 'r').read()
+    finetune_dataset = NameDataset(finetune_text, pretrain_dataset)
+
+
+    # Pre-trained model exists so load the weights and setup a separate config
+    if reading_params_path:
+        # load weights from the pretrained model
+        state_dict = torch.load(reading_params_path, map_location=torch.device('cpu'), weights_only=True)
+        model.load_state_dict(state_dict)
+
+        # Different set of training params (fewer iterations necessary)
+        tconf = TrainerConfig(max_epochs=10, batch_size=256, learning_rate=finetune_lr, lr_decay=True,
+                    warmup_tokens=512*20, final_tokens=200*len(pretrain_dataset)*block_size,
+                    num_workers=0)
+    else:
+        tconf = TrainerConfig(max_epochs=75, batch_size=256, learning_rate=finetune_lr, lr_decay=True,
+                    warmup_tokens=512*20, final_tokens=200*len(pretrain_dataset)*block_size,
+                    num_workers=0)
+
+    trainer_obj = Trainer(model, finetune_dataset, None, tconf)
+
+    
     return tconf, trainer_obj
 
 def pretrain(pretrain_dataset, block_size, model, pretrain_lr=6e-3, writer=None):
@@ -80,21 +94,26 @@ def pretrain(pretrain_dataset, block_size, model, pretrain_lr=6e-3, writer=None)
     ###     final_tokens=200*len(pretrain_dataset)*block_size
     ###     num_workers=0
 
-    trainer_obj = None #Trainer object (see trainer.py for more details)
-    tconf = None #TrainerConfig object (see trainer.py for more details)
+    tconf = TrainerConfig(max_epochs=650, batch_size=128, learning_rate=pretrain_lr,
+                          lr_decay=True, warmup_tokens=512*20, 
+                          final_tokens=200*len(pretrain_dataset)*block_size,
+                          num_workers=0)
+    
+    trainer_obj = Trainer(model, pretrain_dataset, None, tconf)
 
-    ### START CODE HERE
-    ### END CODE HERE
     return tconf, trainer_obj
 
 def train(model, writing_params_path, trainer_obj):
-    ### TODO:
     ### - Given:
     ###     An output path writing_params_path for the model parameters
     ### [part d]:
     ###
     ### Note: trainer_obj is of type Trainer (see trainer.py for more details)
 
-    ### START CODE HERE
-    ### END CODE HERE
+    # Train the model
+    trainer_obj.train()
+
+    # Save the model state dict
+    torch.save(model.state_dict(), writing_params_path)
+
     return
